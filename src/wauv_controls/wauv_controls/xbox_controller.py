@@ -4,6 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from mavros_msgs.msg import PositionTarget
 from mavros_msgs.msg import ManualControl
+from std_msgs.msg import Float32MultiArray
 
 class XboxController(Node):
 
@@ -19,7 +20,7 @@ class XboxController(Node):
             10
         )
 
-        self.xbox_sub = self.create_subscription(Joy, '/joy', self.xbox_cb ,10)
+        self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb ,10)
 
         # Timer creates a loop running at 20 Hz (every 0.05 seconds)
         # This repeatedly calls command_loop()
@@ -35,10 +36,15 @@ class XboxController(Node):
         self.get_logger().info("XBOX controller started")
 
     def xbox_cb(self, msg):
-        self.linear_y = -1 * msg.axes[0]
-        self.linear_x = msg.axes[1]
-        self.linear_z = ((1 - msg.axes[5]) / 2) - ((1 - msg.axes[2]) / 2)
-        self.yaw = -1 * msg.axes[3]
+        self.linear_y = msg.data[0]
+        self.linear_x = -1 * msg.data[1]
+        self.linear_z = ((1 - msg.data[5]) / 2) - ((1 - msg.data[4]) / 2)
+        self.yaw = msg.data[2]
+
+        #[0] = left stick left -1 right +1
+        #[1] = left stick up -1 down +1
+        #[2] = right stick left -1 right +1
+        #[4][5] is lt and rt and -1.0 on rest and 1.0 on full press
 
     def command_loop(self):
         """
@@ -46,10 +52,10 @@ class XboxController(Node):
         Publishes the current velocity as a Twist message.
         """
         cmd = ManualControl()
-        cmd.x = self.linear_x * 1000
-        cmd.y = self.linear_y * 1000
-        cmd.z = (self.linear_z * 500) + 500
-        cmd.r = self.yaw * 1000
+        cmd.x = self.linear_x * 1000 *0.3
+        cmd.y = self.linear_y * 1000 *0.3
+        cmd.z = ((self.linear_z * 500) + 500) *0.3
+        cmd.r = self.yaw * 1000 *0.3
         # Publish command to MAVROS
         self.cmd_pub.publish(cmd)
 
