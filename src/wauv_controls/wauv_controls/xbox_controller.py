@@ -14,8 +14,8 @@ class XboxController(Node):
         # Publisher sends velocity commands (Twist messages)
         # Topic: MAVROS velocity command topic
         self.cmd_pub = self.create_publisher(
-            PositionTarget,
-            'mavros/setpoint_raw/local',
+            ManualControl,
+            'mavros/manual_control/send',
             10
         )
 
@@ -45,16 +45,11 @@ class XboxController(Node):
         Runs at 20 Hz.
         Publishes the current velocity as a Twist message.
         """
-        cmd = PositionTarget()
-        cmd.coordinate_frame = 8
-
-        cmd.type_mask = 1991 #ignores eveerything but xyz vel and yawrate
-
-        cmd.velocity.x = self.linear_x
-        cmd.velocity.y = self.linear_y
-        cmd.velocity.z = self.linear_z
-
-        cmd.yaw_rate = self.yaw
+        cmd = ManualControl()
+        cmd.x = self.linear_x * 1000
+        cmd.y = self.linear_y * 1000
+        cmd.z = (self.linear_z * 500) + 500
+        cmd.r = self.yaw * 1000
         # Publish command to MAVROS
         self.cmd_pub.publish(cmd)
 
