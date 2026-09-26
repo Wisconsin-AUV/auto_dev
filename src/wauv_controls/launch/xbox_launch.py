@@ -7,7 +7,6 @@ def generate_launch_description():
  
     return LaunchDescription([
         # mavros launch
-        # mavros launch
         ExecuteProcess(
             cmd=['bash', '-c',
                 'source /opt/ros/humble/setup.bash && '
