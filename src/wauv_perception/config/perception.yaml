@@ -1,0 +1,28 @@
+# Perception config: the one place that knows the class list and which symbol
+# belongs to which role. The model only ever reports what it sees; if the 2027
+# handbook changes a picture, edit this file, not the model or the code.
+#
+# Class names follow Krill's export format `<type>-<symbol>` and this order is the
+# class order every dataset is remapped to (same as wauv-yolo-data).
+
+label_types:
+  - name: gate
+  - name: role_sign            # gate markers + octagon wall images
+    symbols: [compass, hammer_pick, life_ring, sos]
+  - name: torpedo_board
+  - name: torpedo_hole         # symbol also tells large vs small opening
+    symbols: [fire, fire_truck, blood_drop, ambulance]
+  - name: bin
+    symbols: [fire, blood_drop]
+  - name: table
+  - name: table_item
+    symbols: [nut_bolt, plug, pill, bandage]
+  - name: basket
+    symbols: [warning, helmet_cross]
+
+roles:
+  survey_repair: [compass, hammer_pick, fire, fire_truck, nut_bolt, plug, warning]
+  search_rescue: [life_ring, sos, blood_drop, ambulance, pill, bandage, helmet_cross]
+
+# torpedo: fire the large opening first
+torpedo_large: [fire, blood_drop]
