@@ -28,6 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'vehicle_manager = wauv_controls.vehicle_manager:main',
+            'joy_node = wauv_controls.joy_node:main',
             'manual_controller = wauv_controls.manual_controller:main',
             'xbox_controller = wauv_controls.xbox_controller:main',
         ],
