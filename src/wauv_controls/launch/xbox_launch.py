@@ -35,7 +35,7 @@ def generate_launch_description():
         ),
 
         Node(
-            package='joy',
+            package='wauv_controls',
             executable='joy_node',
             name='joy_node',
             output='screen',
