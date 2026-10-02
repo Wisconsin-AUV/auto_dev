@@ -4,7 +4,7 @@
 
 inline constexpr float PI = 3.14159265358979323846f;
 inline constexpr unsigned char NUM_INPUTS = 23;
-inline constexpr unsigned char NUM_OUTPUTS = 12;
+inline constexpr unsigned char NUM_OUTPUTS = 13;
 
 namespace {
 	constexpr unsigned char round(float value) {
@@ -71,9 +71,8 @@ namespace {
 	constexpr function_variable LOCAL_ANGULAR_ACCELERATION[3] = {function_variable{40.0f * PI, 127}, function_variable{40.0f * PI, 127}, function_variable{40.0f * PI, 127}};
 	constexpr function_variable COMMANDED_LINEAR_VELOCITY[3] = {function_variable{10.0f, 127}, function_variable{10.0f, 127}, function_variable{10.0f, 127}};
 	constexpr function_variable COMMANDED_ANGULAR_VELOCITY[3] = {function_variable{4.0f * PI, 127}, function_variable{4.0f * PI, 127}, function_variable{4.0f * PI, 127}};
-	constexpr function_variable DELTA_TIME{0.0f, 1.0f, 127};
-	constexpr function_variable DELTA_QUATERNION[3] = {function_variable{2.0f, 127}, function_variable{2.0f, 127}, function_variable{2.0f, 127}};
-	constexpr function_variable DELTA_LOCAL_LINEAR_POSITION[3] = {function_variable{1.0f, 127}, function_variable{1.0f, 127}, function_variable{1.0f, 127}};
+	constexpr function_variable DELTA_TIME{1e-6f, 1.0f, 127};
+	constexpr function_variable DELTA_LINEAR_POSITION[3] = {function_variable{1.0f, 127}, function_variable{1.0f, 127}, function_variable{1.0f, 127}};
 
 	constexpr function_variable INPUT_ORDER[NUM_INPUTS] = {
 		QUATERNION[0], QUATERNION[1], QUATERNION[2], QUATERNION[3],
@@ -88,8 +87,8 @@ namespace {
 	constexpr function_variable OUTPUT_ORDER[NUM_OUTPUTS] = {
 		LOCAL_LINEAR_VELOCITY[0], LOCAL_LINEAR_VELOCITY[1], LOCAL_LINEAR_VELOCITY[2],
 		LOCAL_ANGULAR_VELOCITY[0], LOCAL_ANGULAR_VELOCITY[1], LOCAL_ANGULAR_VELOCITY[2],
-		DELTA_QUATERNION[0], DELTA_QUATERNION[1], DELTA_QUATERNION[2],
-		DELTA_LOCAL_LINEAR_POSITION[0], DELTA_LOCAL_LINEAR_POSITION[1], DELTA_LOCAL_LINEAR_POSITION[2]
+		DELTA_LINEAR_POSITION[0], DELTA_LINEAR_POSITION[1], DELTA_LINEAR_POSITION[2],
+		QUATERNION[0], QUATERNION[1], QUATERNION[2], QUATERNION[3] //Technically delta quaternion, but can represent using same function variable
 	};
 
 	constexpr unsigned char calc_bits(const unsigned char num_vars, const function_variable order[]) {
@@ -157,6 +156,8 @@ namespace {
 		}
 	}
 }
+
+constexpr float DELTA_TIME_EPSILON = DELTA_TIME.calc_value(0);
 
 std::bitset<INPUT_BITS> calc_inputs_to_bits(float inputs[]) {
 	return calc_to_bits<INPUT_BITS>(NUM_INPUTS, INPUT_ORDER, inputs);
