@@ -216,3 +216,18 @@ def test_gate_beyond_depth_range_gives_none():
     depth[depth > 8.0] = np.inf
     det = box_in_color(10.0, 1.5, 0.75)
     assert core.estimate_depth_across(depth, det, COLOR_K, DEPTH_K, BASELINE, max_d=8.0) is None
+
+
+# --- whole-sign gate model (wauv-yolo role_signs: one box per printed sign) ---
+
+def test_whole_sign_classes_are_their_own_role(cfg):
+    assert core.role_of('survey_repair', cfg) == 'survey_repair'
+    assert core.role_of('search_rescue', cfg) == 'search_rescue'
+    assert core.role_of('gate', cfg) is None
+
+
+def test_voter_counts_whole_sign_classes(cfg):
+    gate = (0.0, 2.0)
+    signs = [('survey_repair', -1.0), ('search_rescue', 1.0)]
+    voter = core.GateSideVoter('search_rescue', cfg)
+    assert voter.update(gate, signs * 3) == 'right'

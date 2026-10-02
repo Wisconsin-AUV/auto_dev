@@ -74,7 +74,13 @@ def split_class(class_id):
 
 
 def role_of(class_id, cfg):
-    """Role a detection belongs to, or None for role-free classes like 'gate'."""
+    """Role a detection belongs to, or None for role-free classes like 'gate'.
+
+    The whole-sign gate model (wauv-yolo role_signs) names its classes after the
+    roles themselves ('survey_repair', 'search_rescue'), so those map to themselves.
+    """
+    if class_id in cfg['roles']:
+        return class_id
     _, symbol = split_class(class_id)
     if symbol is None:
         return None
@@ -313,7 +319,8 @@ class GateSideVoter:
         if gate is not None:
             mid, half = gate
             for class_id, x in signs:
-                if split_class(class_id)[0] != 'role_sign' or abs(x - mid) > half:
+                is_sign = split_class(class_id)[0] == 'role_sign' or class_id in self.cfg['roles']
+                if not is_sign or abs(x - mid) > half:
                     continue
                 side = -1 if x < mid else 1  # -1 = left half, +1 = right half
                 role = role_of(class_id, self.cfg)

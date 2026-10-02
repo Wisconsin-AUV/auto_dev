@@ -87,7 +87,7 @@ class PerceptionNode(Node):
 
         self.model = YOLO(weights)
         names = [self.model.names[i] for i in sorted(self.model.names)]
-        unknown = [n for n in names if n not in self.cfg['classes']]
+        unknown = [n for n in names if n not in self.cfg['classes'] and n not in self.cfg['roles']]
         if unknown:
             self.get_logger().warn(f"model classes not in perception.yaml: {unknown}")
         self.get_logger().info(f"Loaded {weights} ({len(names)} classes)")
