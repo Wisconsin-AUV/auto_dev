@@ -7,7 +7,6 @@ def generate_launch_description():
  
     return LaunchDescription([
         # mavros launch
-        # mavros launch
         ExecuteProcess(
             cmd=['bash', '-c',
                 'source /opt/ros/humble/setup.bash && '
@@ -36,7 +35,7 @@ def generate_launch_description():
         ),
 
         Node(
-            package='joy',
+            package='wauv_controls',
             executable='joy_node',
             name='joy_node',
             output='screen',
