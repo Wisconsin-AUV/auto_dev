@@ -9,7 +9,10 @@ def generate_launch_description():
     # competition model:                    ros2 launch wauv_perception perception_launch.py yolo_weights:=/path/best.pt
     # real sub (ZED X Mini, depth already registered to the left image); check the topic
     # names with `ros2 topic list` first, they depend on the ZED wrapper's camera_name:
-    #   ros2 launch wauv_perception perception_launch.py yolo_weights:=/path/best.pt yolo_conf:=0.5     #     color_in_depth_x:=0.0     #     image_topic:=/zed/zed_node/rgb/image_rect_color image_info_topic:=/zed/zed_node/rgb/camera_info     #     depth_topic:=/zed/zed_node/depth/depth_registered depth_info_topic:=/zed/zed_node/depth/camera_info
+    #   ros2 launch wauv_perception perception_launch.py yolo_weights:=/path/best.pt yolo_conf:=0.5 \
+    #     color_in_depth_x:=0.0 \
+    #     image_topic:=/zed/zed_node/rgb/image_rect_color image_info_topic:=/zed/zed_node/rgb/camera_info \
+    #     depth_topic:=/zed/zed_node/depth/depth_registered depth_info_topic:=/zed/zed_node/depth/camera_info
     backend = DeclareLaunchArgument('backend', default_value='yolo')
     weights = DeclareLaunchArgument('yolo_weights', default_value='')
     conf = DeclareLaunchArgument('yolo_conf', default_value='0.25')
