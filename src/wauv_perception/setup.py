@@ -14,6 +14,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
+        (os.path.join('share', package_name, 'models', 'role_signs_v3'),
+            glob(os.path.join('models', 'role_signs_v3', '*'))),
     ],
     install_requires=['setuptools', 'PyYAML'],
     zip_safe=True,
