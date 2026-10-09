@@ -32,21 +32,17 @@ build the engine there:
 ## Run it
 
 On the sub. `colcon build` installs these files to
-`share/wauv_perception/models/role_signs_v3/`. Check the ZED topic names with
-`ros2 topic list` first:
+`share/wauv_perception/models/role_signs_v3/`. The node reads the ZED through the SDK, so
+there are no topics to remap:
 
 ```
-ros2 launch wauv_perception perception_launch.py \
-  yolo_weights:=$(ros2 pkg prefix wauv_perception)/share/wauv_perception/models/role_signs_v3/role_signs_v3.pt \
-  yolo_conf:=0.5 color_in_depth_x:=0.0 \
-  image_topic:=/zed/zed_node/rgb/image_rect_color image_info_topic:=/zed/zed_node/rgb/camera_info \
-  depth_topic:=/zed/zed_node/depth/depth_registered depth_info_topic:=/zed/zed_node/depth/camera_info
+ros2 launch wauv_perception perception_launch.py yolo_conf:=0.5 \
+  yolo_weights:=$(ros2 pkg prefix wauv_perception)/share/wauv_perception/models/role_signs_v3/role_signs_v3.pt
 ```
 
-- `color_in_depth_x:=0.0` because the ZED registers depth to the left image. The default
-  (-0.0725) is the Stonefish value and shifts every distance on the real sub.
-- The node waits for depth and both camera_info topics before it runs. No depth means no detections.
-- Debug image with boxes: `/wauv/perception/debug_image`. Detections: `/wauv/perception/objects`.
+- Watch the boxes on the laptop with WAUV-tools' `streamer.py` (UDP port 5000).
+  Detections: `/wauv/perception/objects`.
+- Signs with no usable depth (too far, out of the ZED's range) are drawn red and not published.
 
 On a laptop, on a recording: `yolo predict model=role_signs_v3.pt source=clip.mp4 conf=0.5 save=True`
 
@@ -89,7 +85,7 @@ it called anything red-on-white a sign (fired on 2025 arrow cards at conf 0.95).
 
 ## Pool test: what to bring back
 
-1. **Record raw camera** (`ros2 bag record` the ZED rgb image + camera_info + depth topics).
+1. **Record raw camera** (`record.py` in WAUV-tools saves the RGB video and RGB + depth EXR frames).
    Cover 1-8 m, straight-on and angled (up to ~60°), a few depths, with the signs in and out
    of view, and with last year's props nearby if they're in the pool.
 2. Note when it misses or fires on something wrong (time + what it saw).
