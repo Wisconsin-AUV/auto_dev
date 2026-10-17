@@ -16,6 +16,7 @@ setup(
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
         (os.path.join('share', package_name, 'models', 'role_signs_v3'),
             glob(os.path.join('models', 'role_signs_v3', '*'))),
+        (os.path.join('share', package_name, 'models'), glob('models/*.pt')),
     ],
     install_requires=['setuptools', 'PyYAML'],
     zip_safe=True,
@@ -30,7 +31,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'perception = wauv_perception.perception_node:main',
+            'yolo_dector = wauv_perception.yolo_detector:main',
         ],
     },
 )
