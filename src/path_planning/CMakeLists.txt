@@ -13,16 +13,22 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 
 find_package(tf2 REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
-add_executable(path_planning src/sub_to_point.cpp src/sub_movement_modeling.cpp)
-ament_target_dependencies(path_planning rclcpp geometry_msgs nav_msgs tf2)
+rosidl_generate_interfaces(${PROJECT_NAME} "msg/OdometrySimple.msg" DEPENDENCIES nav_msgs geometry_msgs)
 
-target_include_directories(path_planning PUBLIC
+add_executable(path_planning_node src/sub_to_point.cpp)
+ament_target_dependencies(path_planning_node rclcpp geometry_msgs nav_msgs tf2)
+
+rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+target_link_libraries(path_planning_node "${cpp_typesupport_target}")
+
+target_include_directories(path_planning_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(path_planning PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(path_planning_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
-install(TARGETS path_planning
+install(TARGETS path_planning_node
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
