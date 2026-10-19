@@ -32,7 +32,8 @@ class YoloDetector(Node):
         self.timer = self.create_timer(0.05, self.timer_callback)
 
         package_share = get_package_share_directory('wauv_perception')
-        file_path = os.path.join(package_share, 'models', 'role_signs_v3', 'role_signs_v3.pt')
+        # gate model trained on the Krill gate labels; see models/krill_gate_v1.md
+        file_path = os.path.join(package_share, 'models', 'krill_gate_v1.pt')
         self.model = YOLO(file_path)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
