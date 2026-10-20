@@ -6,6 +6,17 @@ from geometry_msgs.msg import Vector3
 
 class GateScript(Node) :
     def __init__(self) :
+        self.x = 0
+        self.y = 0
+        self.z = 0
+
+        self.blind_ticks = 0
+        self.max_blind_ticks = 40
+        self.updated = False
+
+        self.at_Gate = False
+        self.arrived_deadband = 0.01
+
         #Publisher for mavros
         super().init("Gate Script")
         self.cmd_pub = self.create_publisher(
@@ -22,17 +33,6 @@ class GateScript(Node) :
             10
         )
 
-        self.x = 0
-        self.y = 0
-        self.z = 0
-
-        self.blind_ticks = 0
-        self.max_blind_ticks = 40
-        self.updated = False
-
-        self.at_Gate = False
-        self.arrived_deadband = 0.01
-
         self.timer = self.create_timer(0.05, self.control_loop)
 
         self.get_logger().info("Gate Script Started")
@@ -48,6 +48,8 @@ class GateScript(Node) :
         self.z = msg._z
 
     def control_loop(self) :
+        #Split by new vision data or no new vision data
+
         cmd = PositionTarget()
         if(not self.updated) :
             #No new vision input
@@ -60,8 +62,13 @@ class GateScript(Node) :
                 cmd.position._y = 0
                 cmd.position._z = 0
                 self.get_logger.info("Looking for Gate")
+
         else :
             #Has seen new vision input
+            #Split into two branches: 
+            #   if at the gate, ignore new inputs and just go forward
+            #   if not, normal operation
+
             self.blind_ticks = 0
             #If within deadband
             if(self.x < self.arrived_deadband and self.y < self.arrived_deadband and self.z < self.arrived_deadband and not self.at_Gate) :
