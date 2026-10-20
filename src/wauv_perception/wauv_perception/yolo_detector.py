@@ -28,7 +28,14 @@ class YoloDetector(Node):
         if err != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError(f'Camera Open Error: {err}')
 
+
+        info = self.zed.get_camera_information()
+        conf = getattr(info, 'camera_configuration', info)
+        cam = conf.calibration_parameters.left_cam
+        self.k = (cam.fx, cam.fy, cam.cx, cam.cy)
+
         self.image = sl.Mat()
+        self.depth = sl.Mat()
         self.timer = self.create_timer(0.05, self.timer_callback)
 
         package_share = get_package_share_directory('wauv_perception')
@@ -42,18 +49,28 @@ class YoloDetector(Node):
         if self.zed.grab() != sl.ERROR_CODE.SUCCESS:
             return
         self.zed.retrieve_image(self.image, sl.VIEW.LEFT, sl.MEM.CPU)
+        self.zed.retrieve_measure(self.depth, sl.MEASURE.DEPTH, sl.MEM.CPU)
         frame = cv2.cvtColor(self.image.get_data(), cv2.COLOR_BGRA2BGR)
+        depth = self.depth.get_data()
+        fx, fy, cx, cy = self.k
         # results is a list because you can pass multiple images at once
         results = self.model(frame)
         for result in results:
-            boxes = result.boxes # Bounding boxes object
-
-            for box in boxes:
-                confidence = box.conf[0].item()
-                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            for det in core.yolo_result_to_detections(result):
+                # nearest surface in the box
+                z = core.estimate_depth(depth, det)
+                x1, y1, x2, y2 = int(det.x1), int(det.y1), int(det.x2), int(det.y2)
+                if z is None:
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), thickness=2)
+                    continue
+                u, v = det.center
+                x, y, z = core.pixel_to_optical(u, v, z, fx, fy, cx, cy)
+                self.get_logger().info(
+                    f'{det.class_id} {det.score:.2f}: x={x:.2f} y={y:.2f} z={z:.2f}')
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), thickness=2)
+                cv2.putText(frame, f'{x:.2f} {y:.2f} {z:.2f}m', (x1, max(24, y1 - 8)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA)
 
-        
         stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
         ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         if len(buf) >= 65000:
