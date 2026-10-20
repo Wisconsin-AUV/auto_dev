@@ -51,13 +51,16 @@ class GateScript(Node) :
         #Split by new vision data or no new vision data
 
         cmd = PositionTarget()
-        if(not self.updated) :
-            #No new vision input
+        cmd.coordinate_frame = 8
+        cmd.type_mask = 2040 #ignores eveerything but xyz and yawrate
+
+        if(not self.updated and not self.at_Gate) :
+            #No new vision input and not at the gate
             self.get_logger.info("No New Vision Input")
             self.blind_ticks = self.blind_ticks + 1
             if(self.blind_ticks > self.max_blind_ticks) :
                 #Stop moving and spin, assumes robot is always at 0,0,0
-                cmd.yaw_rate = 1
+                cmd.yaw_rate = 0.3 #range 0 to 1
                 cmd.position._x = 0
                 cmd.position._y = 0
                 cmd.position._z = 0
@@ -73,6 +76,7 @@ class GateScript(Node) :
             #If within deadband
             if(self.x < self.arrived_deadband and self.y < self.arrived_deadband and self.z < self.arrived_deadband and not self.at_Gate) :
                 self.get_logger.info("At Gate")
+                self.at_Gate = True
                 #Has not before set a post gate position
                 cmd.position._x = 1 + self.x
             else :
@@ -83,6 +87,7 @@ class GateScript(Node) :
             cmd.position._z = self.z
         self.cmd_pub.publish(cmd)
         self.get_logger.info("Position Updated")
+        self.updated = False
 
 
 
