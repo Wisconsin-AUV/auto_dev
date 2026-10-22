@@ -5,6 +5,9 @@ from sensor_msgs.msg import Joy
 from mavros_msgs.msg import PositionTarget
 from mavros_msgs.msg import ManualControl
 from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Bool
+import time
+import serial
 
 class XboxController(Node):
 
@@ -20,7 +23,14 @@ class XboxController(Node):
             10
         )
 
-        self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb ,10)
+        self.dropper_pub = self.create_publisher(
+            Bool,
+            '/dropper',
+            10
+        )
+
+
+        self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb , 10)
 
         # Timer creates a loop running at 20 Hz (every 0.05 seconds)
         # This repeatedly calls command_loop()
@@ -31,7 +41,14 @@ class XboxController(Node):
         self.linear_y = 0.0  # left/right
         self.linear_z = 0.0  # up/down
         self.yaw = 0.0
-
+        self.dropper_prev = False
+        self.dropper_state = '1'
+        # self.ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+        # self.ser.dtr = True
+        # self.ser.write(b'\x03\x03')
+        # time.sleep(0.2)
+        # self.ser.write(b'\x04')
+        # time.sleep(1)
         # Log message to confirm node has started
         self.get_logger().info("XBOX controller started")
 
@@ -40,6 +57,11 @@ class XboxController(Node):
         self.linear_x = -1 * msg.data[1]
         self.linear_z = ((1 - msg.data[5]) / 2) - ((1 - msg.data[4]) / 2)
         self.yaw = msg.data[2]
+        pressed = (msg.data[6] == 1.0)
+        if self.dropper_prev and not pressed:  # released -> toggle
+            self.dropper_state = '0' if self.dropper_state == '1' else '1'
+            self.ser.write(self.dropper_state.encode() + b'\n')
+        self.dropper_prev = pressed
 
         #[0] = left stick left -1 right +1
         #[1] = left stick up -1 down +1
@@ -52,10 +74,10 @@ class XboxController(Node):
         Publishes the current velocity as a Twist message.
         """
         cmd = ManualControl()
-        cmd.x = self.linear_x * 1000 *0.3
-        cmd.y = self.linear_y * 1000 *0.3
-        cmd.z = ((self.linear_z * 500) + 500) *0.3
-        cmd.r = self.yaw * 1000 *0.3
+        cmd.x = self.linear_x * 1000 * 0.3
+        cmd.y = self.linear_y * 1000 * 0.3
+        cmd.z = ((self.linear_z * 500) + 500) * 0.3
+        cmd.r = self.yaw * 1000 * 0.3
         # Publish command to MAVROS
         self.cmd_pub.publish(cmd)
 
