@@ -17,6 +17,7 @@ setup(
         (os.path.join('share', package_name, 'models', 'role_signs_v3'),
             glob(os.path.join('models', 'role_signs_v3', '*'))),
         (os.path.join('share', package_name, 'models'), glob('models/*.pt')),
+        (os.path.join('share', package_name, 'models'), glob('models/*.onnx'))
     ],
     install_requires=['setuptools', 'PyYAML'],
     zip_safe=True,
