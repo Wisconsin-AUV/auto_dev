@@ -7,17 +7,17 @@ def generate_launch_description():
  
     return LaunchDescription([
         # mavros launch
-        ExecuteProcess(
-            cmd=['bash', '-c',
-                'source /opt/ros/humble/setup.bash && '
-                'ros2 run mavros mavros_node --ros-args '
-                '-p fcu_url:="udp://127.0.0.1:14551@" '
-                '-p system_id:=255 '
-                '-p tgt_system:=1 '
-                '-p tgt_component:=1 '
-                '-p use_sim_time:=false'],
-            output='screen'
-        ),
+        # ExecuteProcess(
+        #     cmd=['bash', '-c',
+        #         'source /opt/ros/humble/setup.bash && '
+        #         'ros2 run mavros mavros_node --ros-args '
+        #         '-p fcu_url:=/dev/ttyACM0:57600 '
+        #         '-p system_id:=255 '
+        #         '-p tgt_system:=1 '
+        #         '-p tgt_component:=1 '
+        #         '-p use_sim_time:=false'],
+        #     output='screen'
+        # ),
 
         # start ROS nodes
         Node(
@@ -40,5 +40,12 @@ def generate_launch_description():
             name='joy_node',
             output='screen',
         ),
+
+        # Node(
+        #     package='wauv_controls',
+        #     executable='dropper',
+        #     name='dropper',
+        #     output='screen'
+        # )
  
     ])

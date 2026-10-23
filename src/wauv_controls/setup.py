@@ -31,6 +31,7 @@ setup(
             'joy_node = wauv_controls.joy_node:main',
             'manual_controller = wauv_controls.manual_controller:main',
             'xbox_controller = wauv_controls.xbox_controller:main',
+            'dropper = wauv_controls.dropper:main',
         ],
     },
 )
