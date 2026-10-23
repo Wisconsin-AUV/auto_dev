@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(path_planning)
+project(gate_testing)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,28 +7,19 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-
 find_package(rclcpp REQUIRED)
+find_package(vision_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(nav_msgs REQUIRED)
 
-find_package(tf2 REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
+add_executable(gate_testing_node src/gate_testing.cpp)
+ament_target_dependencies(gate_testing_node rclcpp vision_msgs geometry_msgs)
 
-rosidl_generate_interfaces(${PROJECT_NAME} "msg/OdometrySimple.msg" DEPENDENCIES nav_msgs geometry_msgs)
-
-add_executable(path_planning_node src/sub_to_point.cpp)
-ament_target_dependencies(path_planning_node rclcpp geometry_msgs nav_msgs tf2)
-
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
-target_link_libraries(path_planning_node "${cpp_typesupport_target}")
-
-target_include_directories(path_planning_node PUBLIC
+target_include_directories(gate_testing_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(path_planning_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(gate_testing_node PUBLIC c_std_99 cxx_std_17)
 
-install(TARGETS path_planning_node
+install(TARGETS gate_testing_node
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
