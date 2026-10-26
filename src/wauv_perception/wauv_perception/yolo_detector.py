@@ -24,8 +24,10 @@ class YoloDetectorZedNative(Node):
             raise RuntimeError(f'Camera Open Error: {err}')
 
         # 2. Native ZED Custom YOLO ONNX Object Detection (No Positional Tracking)
+        # which model in share/wauv_perception/models to run, e.g. -p model:=bins_v1.onnx
+        model_name = self.declare_parameter('model', 'krill_gate_v1.onnx').value
         package_share = get_package_share_directory('wauv_perception')
-        onnx_path = os.path.join(package_share, 'models', 'krill_gate_v1.onnx')
+        onnx_path = os.path.join(package_share, 'models', model_name)
         if not os.path.exists(onnx_path):
             raise FileNotFoundError(f'ONNX file not found at: {onnx_path}')
 
