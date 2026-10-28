@@ -61,6 +61,7 @@ class XboxController(Node):
         if self.dropper_prev and not pressed:  # released -> toggle
             self.dropper_state = '0' if self.dropper_state == '1' else '1'
             self.ser.write(self.dropper_state.encode() + b'\n')
+            self.get_logger().info(f"{self.dropper_state}")
         self.dropper_prev = pressed
 
         #[0] = left stick left -1 right +1
