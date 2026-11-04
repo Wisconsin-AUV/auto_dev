@@ -6,6 +6,7 @@ import numpy as np  # noqa: E402
 import pyzed.sl as sl
 import rclpy  # noqa: E402
 from rclpy.node import Node  # noqa: E402
+from geometry_msgs.msg import Vector3
 from ament_index_python.packages import get_package_share_directory
 
 
@@ -53,7 +54,10 @@ class YoloDetectorZedNative(Node):
         self.objects = sl.Objects()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        self.timer = self.create_timer(0.05, self.timer_callback)
+        # Gate position in camera optical frame (x right, y down, z forward), meters
+        self.gate_pub = self.create_publisher(Vector3, 'vision/gate_raw', 10)
+
+        self.timer = self.create_timer(0.05, self.timer_callback) #20hz
 
     def timer_callback(self):
         if self.zed.grab(self.runtime_params) != sl.ERROR_CODE.SUCCESS:
@@ -65,8 +69,12 @@ class YoloDetectorZedNative(Node):
         self.zed.retrieve_image(self.image, sl.VIEW.LEFT, sl.MEM.CPU)
         frame = cv2.cvtColor(self.image.get_data(), cv2.COLOR_BGRA2BGR)
 
+        best = None  # (score, x, y, z) of highest-confidence valid detection
+
         if status == sl.ERROR_CODE.SUCCESS:
             for obj in self.objects.object_list:
+                if(obj.raw_label != 0):
+                    continue
                 bbox_2d = obj.bounding_box_2d
                 x1, y1 = int(bbox_2d[0][0]), int(bbox_2d[0][1])
                 x2, y2 = int(bbox_2d[2][0]), int(bbox_2d[2][1])
@@ -76,11 +84,14 @@ class YoloDetectorZedNative(Node):
                 x, y, z = float(pos[0]), float(pos[1]), float(pos[2])
 
                 class_id = obj.raw_label
-                score = obj.confidence / 100.0
+                score = obj.confidence
 
                 if not np.isfinite(z) or z <= 0.0:
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), thickness=2)
                     continue
+
+                if best is None or score > best[0]:
+                    best = (score, x, y, z)
 
                 self.get_logger().info(
                     f'{class_id} {score:.2f}: x={x:.2f} y={y:.2f} z={z:.2f}'
@@ -90,6 +101,11 @@ class YoloDetectorZedNative(Node):
                     frame, f'{x:.2f} {y:.2f} {z:.2f}m', (x1, max(24, y1 - 8)),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA
                 )
+
+        if best is not None:
+            msg = Vector3()
+            _, msg.x, msg.y, msg.z = best
+            self.gate_pub.publish(msg)
 
         # Resize & stream via UDP
         stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
