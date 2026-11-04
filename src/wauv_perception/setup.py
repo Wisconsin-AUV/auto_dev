@@ -32,7 +32,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'yolo_dector = wauv_perception.yolo_detector:main',
+            'yolo_detector = wauv_perception.yolo_detector:main',
         ],
     },
 )
