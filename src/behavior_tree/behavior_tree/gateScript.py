@@ -18,7 +18,7 @@ class GateScript(Node) :
         self.arrived_deadband = 0.01
 
         #Publisher for mavros
-        super().init("Gate Script")
+        super().__init__("gate_script")
         self.cmd_pub = self.create_publisher(
             PositionTarget, 
             "mavros/setpoint_raw/local",
@@ -43,9 +43,9 @@ class GateScript(Node) :
         self.get_logger().info("Gate Coordinates Received")
         self.updated = True
         #Assuming meters
-        self.x = msg._x
-        self.y = msg._y
-        self.z = msg._z
+        self.x = msg.x
+        self.y = msg.y
+        self.z = msg.z
 
     def control_loop(self) :
         #Split by new vision data or no new vision data
@@ -56,15 +56,15 @@ class GateScript(Node) :
 
         if(not self.updated and not self.at_Gate) :
             #No new vision input and not at the gate
-            self.get_logger.info("No New Vision Input")
+            self.get_logger().info("No New Vision Input")
             self.blind_ticks = self.blind_ticks + 1
             if(self.blind_ticks > self.max_blind_ticks) :
                 #Stop moving and spin, assumes robot is always at 0,0,0
                 cmd.yaw_rate = 0.3 #range 0 to 1
-                cmd.position._x = 0
-                cmd.position._y = 0
-                cmd.position._z = 0
-                self.get_logger.info("Looking for Gate")
+                cmd.position._x = 0.0
+                cmd.position._y = 0.0
+                cmd.position._z = 0.0
+                self.get_logger().info("Looking for Gate")
 
         else :
             #Has seen new vision input
@@ -78,7 +78,7 @@ class GateScript(Node) :
                 self.get_logger.info("At Gate")
                 self.at_Gate = True
                 #Has not before set a post gate position
-                cmd.position._x = 1 + self.x
+                cmd.position._x = 1.0 + self.x
             else :
                 #normal operation
                 cmd.position._x = self.x
@@ -86,7 +86,7 @@ class GateScript(Node) :
             cmd.position._y = self.y
             cmd.position._z = self.z
         self.cmd_pub.publish(cmd)
-        self.get_logger.info("Position Updated")
+        self.get_logger().info("Position Updated")
         self.updated = False
 
 
