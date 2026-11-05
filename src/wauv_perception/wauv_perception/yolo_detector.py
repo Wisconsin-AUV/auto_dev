@@ -24,6 +24,9 @@ class YoloDetectorZedNative(Node):
         # This applies to the pose AND to obj.position.
         init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
 
+        init_params.depth_maximum_distance = 10.0
+        init_params.camera_fps = 15
+
         err = self.zed.open(init_params)
         if err != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError(f'Camera Open Error: {err}')
@@ -33,7 +36,7 @@ class YoloDetectorZedNative(Node):
         tracking_params.enable_imu_fusion = True      # ZED X Mini has an IMU; keep on
         tracking_params.set_floor_as_origin = False   # no floor plane underwater
         tracking_params.enable_area_memory = False    # no loop closure; avoids pose jumps
-        # tracking_params.mode = sl.POSITIONAL_TRACKING_MODE.GEN_2  # SDK 5.x only
+        tracking_params.mode = sl.POSITIONAL_TRACKING_MODE.GEN_3
         err = self.zed.enable_positional_tracking(tracking_params)
         if err != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError(f'Positional Tracking Enable Error: {err}')
@@ -66,7 +69,7 @@ class YoloDetectorZedNative(Node):
 
         self.image = sl.Mat()
         self.objects = sl.Objects()
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # CHANGED: gate position in the camera frame (x fwd, y left, z up), meters
         self.gate_pub = self.create_publisher(Vector3, 'vision/gate_raw', 10)
@@ -154,16 +157,16 @@ class YoloDetectorZedNative(Node):
             _, msg.x, msg.y, msg.z = best
             self.gate_pub.publish(msg)
 
-        stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
-        ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        if ok:
-            if len(buf) >= 65000:
-                self.get_logger().warn(f"frame too big: {len(buf)} bytes, dropped")
-            else:
-                try:
-                    self.sock.sendto(buf.tobytes(), ("192.168.137.1", 5000))
-                except OSError:
-                    pass
+        # stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
+        # ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        # if ok:
+        #     if len(buf) >= 65000:
+        #         self.get_logger().warn(f"frame too big: {len(buf)} bytes, dropped")
+        #     else:
+        #         try:
+        #             self.sock.sendto(buf.tobytes(), ("192.168.137.1", 5000))
+        #         except OSError:
+        #             pass
 
 
 def main(args=None):
