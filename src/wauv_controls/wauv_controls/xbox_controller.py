@@ -118,10 +118,10 @@ class XboxController(Node):
 
     def command_loop(self):
         cmd = ManualControl()
-        cmd.x = self.linear_x * 1000 * 0.3
-        cmd.y = self.linear_y * 1000 * 0.3
-        cmd.z = ((self.linear_z * 500) + 500) * 0.3
-        cmd.r = self.yaw * 1000 * 0.3
+        cmd.x = self.linear_x * 1000 * 0.5
+        cmd.y = self.linear_y * 1000 * 0.5
+        cmd.z = ((self.linear_z * 500) + 500) * 0.5
+        cmd.r = self.yaw * 1000 * 0.5
         self.cmd_pub.publish(cmd)
 
     def destroy_node(self):
