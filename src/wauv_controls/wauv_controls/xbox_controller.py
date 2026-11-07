@@ -20,11 +20,6 @@ class XboxController(Node):
     def __init__(self):
         super().__init__('xbox_controller')
 
-        self.cmd_pub = self.create_publisher(ManualControl, 'mavros/manual_control/send', 10)
-        self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb, 10)
-        self.timer = self.create_timer(0.05, self.command_loop)
-        self.step_timer = self.create_timer(0.01, self.stepper_loop)  # fast so chunks run back-to-back
-
         self.linear_x = 0.0
         self.linear_y = 0.0
         self.linear_z = 0.0
@@ -49,6 +44,11 @@ class XboxController(Node):
         self.ser.reset_input_buffer()
         self.send('OFF')
         self.send(f'SPEED {STEP_SPEED}')
+
+        self.cmd_pub = self.create_publisher(ManualControl, 'mavros/manual_control/send', 10)
+        self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb, 10)
+        self.timer = self.create_timer(0.05, self.command_loop)
+        self.step_timer = self.create_timer(0.01, self.stepper_loop)  # fast so chunks run back-to-back
 
         self.get_logger().info("XBOX controller started")
 
