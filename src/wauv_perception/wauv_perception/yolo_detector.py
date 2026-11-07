@@ -93,7 +93,7 @@ class YoloDetectorZedNative(Node):
         msg = Odometry()
         msg.header.stamp = Time(nanoseconds=self.pose.timestamp.get_nanoseconds()).to_msg()
         msg.header.frame_id = 'odom'
-        msg.child_frame_id = 'zed_camera_link'
+        msg.child_frame_id = 'base_link'
         msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z = map(float, t)
         (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
          msg.pose.pose.orientation.z, msg.pose.pose.orientation.w) = map(float, q)
