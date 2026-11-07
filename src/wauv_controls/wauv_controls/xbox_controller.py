@@ -9,71 +9,82 @@ from std_msgs.msg import Bool
 import time
 import serial
 
+# /joystick layout: data[0:6] = axes, data[6:] = buttons
+# Button index in data -> solenoid number on the Pico
+SOL_BUTTONS = {6: 1, 7: 2, 8: 3, 9: 4}   # A, B, X, Y 
+
+
 class XboxController(Node):
 
     def __init__(self):
-        # Initialise the ROS2 node with name 'manual_controller'
         super().__init__('xbox_controller')
 
-        # Publisher sends velocity commands (Twist messages)
-        # Topic: MAVROS velocity command topic
-        self.cmd_pub = self.create_publisher(
-            ManualControl,
-            'mavros/manual_control/send',
-            10
-        )
-
-        self.dropper_pub = self.create_publisher(
-            Bool,
-            '/dropper',
-            10
-        )
-
-
-        self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb , 10)
-
-        # Timer creates a loop running at 20 Hz (every 0.05 seconds)
-        # This repeatedly calls command_loop()
+        self.cmd_pub = self.create_publisher(ManualControl, 'mavros/manual_control/send', 10)
+        self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb, 10)
         self.timer = self.create_timer(0.05, self.command_loop)
 
-        # Current velocity state (these get updated by keyboard input)
-        self.linear_x = 0.0  # forward/backward
-        self.linear_y = 0.0  # left/right
-        self.linear_z = 0.0  # up/down
+        self.linear_x = 0.0
+        self.linear_y = 0.0
+        self.linear_z = 0.0
         self.yaw = 0.0
-        self.dropper_prev = False
-        self.dropper_state = '1'
-        # self.ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
-        # self.ser.dtr = True
-        # self.ser.write(b'\x03\x03')
-        # time.sleep(0.2)
-        # self.ser.write(b'\x04')
-        # time.sleep(1)
-        # Log message to confirm node has started
+
+        self.btn_prev = {i: False for i in SOL_BUTTONS}
+        self.sol_state = {n: 0 for n in SOL_BUTTONS.values()}
+        self.rx_buf = b''
+
+        # timeout=0 -> reads never block the executor
+        self.ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0)
+        self.ser.dtr = True
+        self.ser.write(b'\x03\x03')   # Ctrl-C: interrupt whatever is running
+        time.sleep(0.2)
+        self.ser.write(b'\x04')       # Ctrl-D: soft reboot -> runs main.py
+        time.sleep(1.5)
+        self.ser.reset_input_buffer() # drop REPL/boot banner
+        self.send('OFF')
+
         self.get_logger().info("XBOX controller started")
 
-    def xbox_cb(self, msg):
-        self.linear_y = msg.data[0]
-        self.linear_x = -1 * msg.data[1]
-        self.linear_z = ((1 - msg.data[5]) / 2) - ((1 - msg.data[4]) / 2)
-        self.yaw = msg.data[2]
-        pressed = (msg.data[6] == 1.0)
-        if self.dropper_prev and not pressed:  # released -> toggle
-            self.dropper_state = '0' if self.dropper_state == '1' else '1'
-            self.ser.write(self.dropper_state.encode() + b'\n')
-            self.get_logger().info(f"{self.dropper_state}")
-        self.dropper_prev = pressed
+    # ---------- serial ----------
+    def send(self, line):
+        self.ser.write((line + '\n').encode())
+        self.get_logger().info(f"-> {line}")
 
-        #[0] = left stick left -1 right +1
-        #[1] = left stick up -1 down +1
-        #[2] = right stick left -1 right +1
-        #[4][5] is lt and rt and -1.0 on rest and 1.0 on full press
+    def read_replies(self):
+        """Drain the Pico's OK/ERR replies without blocking.
+        If they're never read, its USB buffer fills up and print() blocks the Pico."""
+        n = self.ser.in_waiting
+        if not n:
+            return
+        self.rx_buf += self.ser.read(n)
+        *lines, self.rx_buf = self.rx_buf.split(b'\n')
+        for raw in lines:
+            reply = raw.decode(errors='ignore').strip()
+            if reply.startswith('ERR'):
+                self.get_logger().warn(f"Pico: {reply}")
+
+    # ---------- joystick ----------
+    def xbox_cb(self, msg):
+        d = msg.data
+        if len(d) <= max(SOL_BUTTONS):
+            self.get_logger().warn(f"/joystick too short: {len(d)}")
+            return
+
+        self.linear_y = d[0]
+        self.linear_x = -d[1]
+        self.linear_z = ((1 - d[5]) / 2) - ((1 - d[4]) / 2)
+        self.yaw = d[2]
+
+        # toggle a solenoid on button release
+        for idx, sol in SOL_BUTTONS.items():
+            pressed = (d[idx] == 1.0)
+            if self.btn_prev[idx] and not pressed:
+                self.sol_state[sol] ^= 1
+                self.send(f"SOL {sol} {self.sol_state[sol]}")
+            self.btn_prev[idx] = pressed
 
     def command_loop(self):
-        """
-        Runs at 20 Hz.
-        Publishes the current velocity as a Twist message.
-        """
+        self.read_replies()
+
         cmd = ManualControl()
         cmd.x = self.linear_x * 1000 * 0.3
         cmd.y = self.linear_y * 1000 * 0.3
@@ -82,20 +93,25 @@ class XboxController(Node):
         # Publish command to MAVROS
         self.cmd_pub.publish(cmd)
 
+    def destroy_node(self):
+        try:
+            self.send('OFF')
+            self.ser.close()
+        except Exception:
+            pass
+        super().destroy_node()
+
 
 def main(args=None):
-    # Initialise ROS2 communication
     rclpy.init(args=args)
-
-    # Create the node
     node = XboxController()
-
-    # Keep node running and processing callbacks
-    rclpy.spin(node)
-
-    # Cleanup when shutting down
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

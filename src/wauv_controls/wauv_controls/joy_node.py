@@ -38,7 +38,9 @@ class joy_node(Node):
         try:
             joy_msg = json.loads(latest.decode('utf-8'))
             joy = Float32MultiArray()
-            joy.data = [float(x) for x in joy_msg["axes"]] + [float(x) for x in joy_msg["buttons"]]
+            joy.data = ([float(x) for x in joy_msg["axes"]]
+            + [float(x) for x in joy_msg["buttons"]]
+            + [float(x) for x in joy_msg.get("hats", [0, 0])])
             self.cmd_pub.publish(joy)
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
