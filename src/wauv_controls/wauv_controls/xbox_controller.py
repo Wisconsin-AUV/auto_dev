@@ -120,7 +120,7 @@ class XboxController(Node):
         cmd = ManualControl()
         cmd.x = self.linear_x * 1000 * 0.5
         cmd.y = self.linear_y * 1000 * 0.5
-        cmd.z = ((self.linear_z * 500) + 500) * 0.5
+        cmd.z = 500 + (self.linear_z * 500 * 0.5)
         cmd.r = self.yaw * 1000 * 0.5
         self.cmd_pub.publish(cmd)
 
