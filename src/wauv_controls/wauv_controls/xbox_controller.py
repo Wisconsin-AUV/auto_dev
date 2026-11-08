@@ -5,6 +5,7 @@ from std_msgs.msg import Float32MultiArray
 from collections import deque
 import time
 import serial
+from serial.tools import list_ports
 
 # /joystick layout: data[0:6] = axes, then buttons, then hats [x, y]
 SOL_BUTTONS = {6: 1, 7: 2, 8: 3, 9: 4}   # A, B, X, Y
@@ -13,6 +14,15 @@ STEP_CHUNK = 100         # steps per MOVE; smaller = faster stop on release, mor
 STEP_SPEED = 1600        # steps/s sent once at startup
 JOYSTICK_TIMEOUT = 0.3   # s; treat hat as released if /joystick goes stale
 MOVE_TIMEOUT = 2.0       # s; give up waiting for a MOVE's OK
+# USB vendor IDs a Pico may enumerate with
+PICO_VIDS = (0x2E8A, 0x239A)
+
+
+def find_pico_port():
+    for p in list_ports.comports():
+        if p.vid in PICO_VIDS:
+            return p.device
+    return None
 
 
 class XboxController(Node):
@@ -35,15 +45,25 @@ class XboxController(Node):
         self.move_pending = False
         self.move_sent_at = 0.0
 
-        self.ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0)
-        self.ser.dtr = True
-        self.ser.write(b'\x03\x03')
-        time.sleep(0.2)
-        self.ser.write(b'\x04')
-        time.sleep(1.5)
-        self.ser.reset_input_buffer()
-        self.send('OFF')
-        self.send(f'SPEED {STEP_SPEED}')
+        # override with: --ros-args -p pico_port:=/dev/serial/by-id/...
+        self.declare_parameter('pico_port', '')
+        port = self.get_parameter('pico_port').value or find_pico_port()
+        self.ser = None
+        if port is None:
+            self.get_logger().error(
+                "Pico not found; solenoids/stepper disabled, thrusters still active. "
+                f"Ports seen: {[p.device for p in list_ports.comports()]}")
+        else:
+            self.get_logger().info(f"Pico on {port}")
+            self.ser = serial.Serial(port, 115200, timeout=0)
+            self.ser.dtr = True
+            self.ser.write(b'\x03\x03')
+            time.sleep(0.2)
+            self.ser.write(b'\x04')
+            time.sleep(1.5)
+            self.ser.reset_input_buffer()
+            self.send('OFF')
+            self.send(f'SPEED {STEP_SPEED}')
 
         self.cmd_pub = self.create_publisher(ManualControl, 'mavros/manual_control/send', 10)
         self.xbox_sub = self.create_subscription(Float32MultiArray, '/joystick', self.xbox_cb, 10)
@@ -54,12 +74,16 @@ class XboxController(Node):
 
     # ---------- serial ----------
     def send(self, line, log=True):
+        if self.ser is None:
+            return
         self.ser.write((line + '\n').encode())
         self.pending.append(line.split()[0])
         if log:
             self.get_logger().info(f"-> {line}")
 
     def read_replies(self):
+        if self.ser is None:
+            return
         n = self.ser.in_waiting
         if not n:
             return
@@ -111,7 +135,7 @@ class XboxController(Node):
             self.move_pending = False
             self.pending.clear()
 
-        if self.jog_dir and not self.move_pending:
+        if self.ser is not None and self.jog_dir and not self.move_pending:
             self.send(f"MOVE {self.jog_dir * STEP_CHUNK}", log=False)
             self.move_pending = True
             self.move_sent_at = now
