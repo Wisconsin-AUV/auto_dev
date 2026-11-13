@@ -3,6 +3,7 @@ import py_trees
 #add actions
 from blackboard import client, prequalTasks
 
+
 #Actions that can be merged into one
 #   gateCheckBoard/poleCheckBoard
 #   lookAround/alignGate/rollGate
@@ -145,6 +146,12 @@ def getPrequalTree():
     getAndDoTask = py_trees.composites.Sequence("Get And Do Task", True)
     getAndDoTask.add_children(
         [popTask, skipOrDo]
+    )
+
+    detectVision = py_trees.composites.Repeat(
+        child=detectVision,
+        num_success=-1,
+        name="Repeat Detect"
     )
 
     #Repeat forever until popTask fails on an empty queue
