@@ -21,17 +21,8 @@ TOPICS = [
     '/mavros/imu/data_raw',
     '/mavros/imu/mag',                  # compass, for coilgun interference ;)
     '/mavros/global_position/rel_alt',  # depth
-    '/mavros/vfr_hud',
-    '/mavros/local_position/.*',        # pose/velocity once the DVL is in
-    '/mavros/manual_control/send',      # thrust commands
-    '/mavros/setpoint_raw/.*',          # GUIDED commands
-    '/mavros/setpoint_velocity/.*',
-    '/mavros/setpoint_position/.*',
-    '/mavros/rc/out',                   # thruster PWM, for effort/saturation
-    '/mavros/battery',                  # voltage dip on coilgun shots
-    '/joy',                             # pilot input
+    '/mavros/local_position/odom',        # pose/velocity once the DVL is in
     '/joystick',
-    '/rosout',
 ]
 
 
