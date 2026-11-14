@@ -69,7 +69,7 @@ class YoloDetectorZedNative(Node):
 
         self.image = sl.Mat()
         self.objects = sl.Objects()
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # CHANGED: gate position in the camera frame (x fwd, y left, z up), meters
         self.gate_pub = self.create_publisher(Vector3, 'vision/gate_raw', 10)
@@ -117,15 +117,15 @@ class YoloDetectorZedNative(Node):
 
         status = self.zed.retrieve_custom_objects(self.objects, self.od_runtime_params)
 
-        self.zed.retrieve_image(self.image, sl.VIEW.LEFT, sl.MEM.CPU)
-        frame = cv2.cvtColor(self.image.get_data(), cv2.COLOR_BGRA2BGR)
+        # self.zed.retrieve_image(self.image, sl.VIEW.LEFT, sl.MEM.CPU)
+        # frame = cv2.cvtColor(self.image.get_data(), cv2.COLOR_BGRA2BGR)
 
         best = None
 
         if status == sl.ERROR_CODE.SUCCESS:
             for obj in self.objects.object_list:
-                if obj.raw_label != 0:
-                    continue
+                # if obj.raw_label != 0:
+                #     continue
                 bbox_2d = obj.bounding_box_2d
                 x1, y1 = int(bbox_2d[0][0]), int(bbox_2d[0][1])
                 x2, y2 = int(bbox_2d[2][0]), int(bbox_2d[2][1])
@@ -138,35 +138,35 @@ class YoloDetectorZedNative(Node):
                 score = obj.confidence
 
                 # CHANGED: forward is now x, not z
-                if not np.isfinite(x) or x <= 0.0:
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), thickness=2)
-                    continue
+                # if not np.isfinite(x) or x <= 0.0:
+                #     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), thickness=2)
+                #     continue
 
                 if best is None or score > best[0]:
                     best = (score, x, y, z)
 
                 self.get_logger().info(f'{class_id} {score:.2f}: x={x:.2f} y={y:.2f} z={z:.2f}')
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), thickness=2)
-                cv2.putText(
-                    frame, f'{x:.2f} {y:.2f} {z:.2f}m', (x1, max(24, y1 - 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA
-                )
+                # cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), thickness=2)
+                # cv2.putText(
+                #     frame, f'{x:.2f} {y:.2f} {z:.2f}m', (x1, max(24, y1 - 8)),
+                #     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA
+                # )
 
         if best is not None:
             msg = Vector3()
             _, msg.x, msg.y, msg.z = best
             self.gate_pub.publish(msg)
 
-        stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
-        ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        if ok:
-            if len(buf) >= 65000:
-                self.get_logger().warn(f"frame too big: {len(buf)} bytes, dropped")
-            else:
-                try:
-                    self.sock.sendto(buf.tobytes(), ("192.168.137.1", 5000))
-                except OSError:
-                    pass
+        # stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
+        # ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 55])
+        # if ok:
+        #     if len(buf) >= 65000:
+        #         self.get_logger().warn(f"frame too big: {len(buf)} bytes, dropped")
+        #     else:
+        #         try:
+        #             self.sock.sendto(buf.tobytes(), ("192.168.137.1", 5000))
+        #         except OSError:
+        #             pass
 
 
 def main(args=None):
