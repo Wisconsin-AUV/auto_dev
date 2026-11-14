@@ -69,7 +69,7 @@ class YoloDetectorZedNative(Node):
 
         self.image = sl.Mat()
         self.objects = sl.Objects()
-        # self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # CHANGED: gate position in the camera frame (x fwd, y left, z up), meters
         self.gate_pub = self.create_publisher(Vector3, 'vision/gate_raw', 10)
@@ -157,16 +157,16 @@ class YoloDetectorZedNative(Node):
             _, msg.x, msg.y, msg.z = best
             self.gate_pub.publish(msg)
 
-        # stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
-        # ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        # if ok:
-        #     if len(buf) >= 65000:
-        #         self.get_logger().warn(f"frame too big: {len(buf)} bytes, dropped")
-        #     else:
-        #         try:
-        #             self.sock.sendto(buf.tobytes(), ("192.168.137.1", 5000))
-        #         except OSError:
-        #             pass
+        stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
+        ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            if len(buf) >= 65000:
+                self.get_logger().warn(f"frame too big: {len(buf)} bytes, dropped")
+            else:
+                try:
+                    self.sock.sendto(buf.tobytes(), ("192.168.137.1", 5000))
+                except OSError:
+                    pass
 
 
 def main(args=None):
