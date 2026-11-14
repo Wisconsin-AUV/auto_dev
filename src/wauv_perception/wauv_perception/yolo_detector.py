@@ -1,23 +1,15 @@
 import os
-os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '1')  # NEW: must be set before cv2 import for .exr writing
-import queue  # NEW
 import socket
-import threading  # NEW
-import time  # NEW
 
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 import pyzed.sl as sl
 import rclpy  # noqa: E402
 from rclpy.node import Node  # noqa: E402
-from rclpy.time import Time
+from rclpy.time import Time  # NEW
 from geometry_msgs.msg import Vector3
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry  # NEW
 from ament_index_python.packages import get_package_share_directory
-
-LAPTOP_ADDR = ('192.168.137.1', 5000)  # NEW
-STREAM_SIZE = (640, 360)               # NEW
-JPEG_QUALITY = 70                      # NEW
 
 
 class YoloDetectorZedNative(Node):
@@ -28,7 +20,8 @@ class YoloDetectorZedNative(Node):
         init_params = sl.InitParameters()
         init_params.depth_mode = sl.DEPTH_MODE.NEURAL
         init_params.coordinate_units = sl.UNIT.METER
-        # ROS convention (REP-103): x forward, y left, z up.
+        # CHANGED: ROS convention (REP-103): x forward, y left, z up.
+        # This applies to the pose AND to obj.position.
         init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
 
         init_params.depth_maximum_distance = 10.0
@@ -38,11 +31,11 @@ class YoloDetectorZedNative(Node):
         if err != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError(f'Camera Open Error: {err}')
 
-        # Positional tracking. It must be enabled BEFORE object detection.
+        # NEW: Positional tracking. It must be enabled BEFORE object detection.
         tracking_params = sl.PositionalTrackingParameters()
-        tracking_params.enable_imu_fusion = True
-        tracking_params.set_floor_as_origin = False
-        tracking_params.enable_area_memory = False
+        tracking_params.enable_imu_fusion = True      # ZED X Mini has an IMU; keep on
+        tracking_params.set_floor_as_origin = False   # no floor plane underwater
+        tracking_params.enable_area_memory = False    # no loop closure; avoids pose jumps
         tracking_params.mode = sl.POSITIONAL_TRACKING_MODE.GEN_3
         err = self.zed.enable_positional_tracking(tracking_params)
         if err != sl.ERROR_CODE.SUCCESS:
@@ -69,79 +62,33 @@ class YoloDetectorZedNative(Node):
         self.get_logger().info('ZED YOLO TensorRT Engine Ready!')
 
         self.runtime_params = sl.RuntimeParameters()
+        # NEW: keep detections camera-relative. Otherwise they would come out in the world frame.
         self.runtime_params.measure3D_reference_frame = sl.REFERENCE_FRAME.CAMERA
         self.od_runtime_params = sl.CustomObjectDetectionRuntimeParameters()
         self.od_runtime_params.object_detection_properties.detection_confidence_threshold = 30
 
         self.image = sl.Mat()
-        self.depth = sl.Mat()  # NEW
         self.objects = sl.Objects()
+        # self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        # NEW: streaming + recording toggles
-        self.stream = self.declare_parameter('stream', True).value
-        self.record = self.declare_parameter('record', True).value
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        # NEW: recording (from record.py). One folder per run so runs never overwrite each other.
-        self.out_dir = os.path.join('data', time.strftime('%Y%m%d_%H%M%S'))
-        self.exr_queue = queue.Queue(maxsize=10)
-        self.mp4_queue = queue.Queue(maxsize=10)
-        self.stop_event = threading.Event()
-        self.workers = []
-        if self.record:
-            os.makedirs(self.out_dir, exist_ok=True)
-            self.workers = [
-                threading.Thread(target=self.exr_saving_worker, daemon=True),
-                threading.Thread(target=self.mp4_saving_worker, daemon=True),
-            ]
-            for t in self.workers:
-                t.start()
-            self.get_logger().info(f'Recording to {os.path.abspath(self.out_dir)}')
-
+        # CHANGED: gate position in the camera frame (x fwd, y left, z up), meters
         self.gate_pub = self.create_publisher(Vector3, 'vision/gate_raw', 10)
+        # NEW
         self.odom_pub = self.create_publisher(Odometry, '/mavros/odometry/out', 10)
 
         self.timer = self.create_timer(0.05, self.timer_callback)  # 20 Hz
 
-    # NEW: background writers (from record.py)
-    def exr_saving_worker(self):
-        idx = 0
-        while not self.stop_event.is_set() or not self.exr_queue.empty():
-            try:
-                rgbd = self.exr_queue.get(timeout=1)
-            except queue.Empty:
-                continue
-            cv2.imwrite(os.path.join(self.out_dir, f'rgbd_{idx:06d}.exr'), rgbd)
-            idx += 1
-            self.exr_queue.task_done()
-
-    def mp4_saving_worker(self):
-        writer = None
-        while not self.stop_event.is_set() or not self.mp4_queue.empty():
-            try:
-                frame = self.mp4_queue.get(timeout=1)
-            except queue.Empty:
-                continue
-            if writer is None:  # size from the actual frame, not hardcoded
-                h, w = frame.shape[:2]
-                writer = cv2.VideoWriter(
-                    os.path.join(self.out_dir, 'rgb_out.mp4'),
-                    cv2.VideoWriter_fourcc(*'mp4v'), 15.0, (w, h))
-            writer.write(frame)
-            self.mp4_queue.task_done()
-        if writer is not None:
-            writer.release()
-
+    # NEW
     def publish_pose(self):
         state = self.zed.get_position(self.pose, sl.REFERENCE_FRAME.WORLD)
         if state != self.last_track_state:
             self.get_logger().info(f'Tracking state: {state}')
             self.last_track_state = state
         if state != sl.POSITIONAL_TRACKING_STATE.OK:
-            return
+            return  # SEARCHING / OFF / FPS_TOO_LOW: covariance is not meaningful
 
-        t = self.pose.get_translation(sl.Translation()).get()
-        q = self.pose.get_orientation(sl.Orientation()).get()
+        t = self.pose.get_translation(sl.Translation()).get()  # [x, y, z]
+        q = self.pose.get_orientation(sl.Orientation()).get()  # [ox, oy, oz, ow]
 
         msg = Odometry()
         msg.header.stamp = Time(nanoseconds=self.pose.timestamp.get_nanoseconds()).to_msg()
@@ -151,8 +98,10 @@ class YoloDetectorZedNative(Node):
         (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
          msg.pose.pose.orientation.z, msg.pose.pose.orientation.w) = map(float, q)
 
+        # 36 floats, row-major 6x6, order [x, y, z, rot_x, rot_y, rot_z] (same order as ROS)
         msg.pose.covariance = [float(c) for c in self.pose.pose_covariance]
 
+        # Twist and its covariance (SDK >= 4.0)
         tw = self.pose.twist
         (msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z,
          msg.twist.twist.angular.x, msg.twist.twist.angular.y, msg.twist.twist.angular.z) = map(float, tw)
@@ -164,38 +113,31 @@ class YoloDetectorZedNative(Node):
         if self.zed.grab(self.runtime_params) != sl.ERROR_CODE.SUCCESS:
             return
 
-        self.publish_pose()
+        self.publish_pose()  # NEW
 
         status = self.zed.retrieve_custom_objects(self.objects, self.od_runtime_params)
 
         self.zed.retrieve_image(self.image, sl.VIEW.LEFT, sl.MEM.CPU)
         frame = cv2.cvtColor(self.image.get_data(), cv2.COLOR_BGRA2BGR)
 
-        # NEW: record the clean frame + depth BEFORE boxes are drawn on it
-        if self.record:
-            self.zed.retrieve_measure(self.depth, sl.MEASURE.DEPTH)
-            if not self.mp4_queue.full():
-                self.mp4_queue.put(frame.copy())
-            if not self.exr_queue.full():
-                depth = self.depth.get_data()
-                if depth.ndim == 2:
-                    depth = depth[..., None]
-                self.exr_queue.put(np.dstack((frame, depth)))  # dstack makes a new array
-
         best = None
 
         if status == sl.ERROR_CODE.SUCCESS:
             for obj in self.objects.object_list:
+                if obj.raw_label != 0:
+                    continue
                 bbox_2d = obj.bounding_box_2d
                 x1, y1 = int(bbox_2d[0][0]), int(bbox_2d[0][1])
                 x2, y2 = int(bbox_2d[2][0]), int(bbox_2d[2][1])
 
+                # 3D position [x fwd, y left, z up] in meters
                 pos = obj.position
                 x, y, z = float(pos[0]), float(pos[1]), float(pos[2])
 
                 class_id = obj.raw_label
                 score = obj.confidence
 
+                # CHANGED: forward is now x, not z
                 if not np.isfinite(x) or x <= 0.0:
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), thickness=2)
                     continue
@@ -215,18 +157,16 @@ class YoloDetectorZedNative(Node):
             _, msg.x, msg.y, msg.z = best
             self.gate_pub.publish(msg)
 
-        # CHANGED: re-enabled; streams the annotated frame
-        if self.stream:
-            stream_frame = cv2.resize(frame, STREAM_SIZE, interpolation=cv2.INTER_AREA)
-            ok, buf = cv2.imencode('.jpg', stream_frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
-            if ok:
-                if len(buf) >= 65000:
-                    self.get_logger().warn(f'frame too big: {len(buf)} bytes, dropped')
-                else:
-                    try:
-                        self.sock.sendto(buf.tobytes(), LAPTOP_ADDR)
-                    except OSError:
-                        pass
+        # stream_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
+        # ok, buf = cv2.imencode(".jpg", stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        # if ok:
+        #     if len(buf) >= 65000:
+        #         self.get_logger().warn(f"frame too big: {len(buf)} bytes, dropped")
+        #     else:
+        #         try:
+        #             self.sock.sendto(buf.tobytes(), ("192.168.137.1", 5000))
+        #         except OSError:
+        #             pass
 
 
 def main(args=None):
@@ -237,12 +177,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        # NEW: flush remaining frames to disk
-        yolo_detector.stop_event.set()
-        for t in yolo_detector.workers:
-            t.join()
         yolo_detector.zed.disable_object_detection()
-        yolo_detector.zed.disable_positional_tracking()
+        yolo_detector.zed.disable_positional_tracking()  # NEW
         yolo_detector.zed.close()
         yolo_detector.sock.close()
         yolo_detector.destroy_node()
