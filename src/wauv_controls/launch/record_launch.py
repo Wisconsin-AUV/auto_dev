@@ -23,6 +23,7 @@ TOPICS = [
     '/mavros/global_position/rel_alt',  # depth
     '/mavros/local_position/odom',        # pose/velocity once the DVL is in
     '/joystick',
+    'mavros/odometry/out'               # VSLAM out
 ]
 
 
