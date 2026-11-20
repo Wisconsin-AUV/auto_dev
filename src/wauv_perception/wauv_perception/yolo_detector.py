@@ -192,12 +192,6 @@ def main(args=None):
         pass
     finally:
         yolo_detector.zed.disable_recording()
-        yolo_detector.stop_event.set()  
-        # NEW: flush remaining frames to disk
-        yolo_detector.stop_event.set()
-        for t in yolo_detector.workers:
-            t.join()
-        yolo_detector.zed.disable_object_detection()
         yolo_detector.zed.disable_positional_tracking()
         yolo_detector.zed.close()
         yolo_detector.sock.close()
