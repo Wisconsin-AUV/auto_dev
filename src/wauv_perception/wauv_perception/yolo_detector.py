@@ -1,10 +1,6 @@
-import os
-os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '1')  # NEW: must be set before cv2 import for .exr writing
-import queue  # NEW
 import socket
-import threading  # NEW
-import time  # NEW
-
+import os
+import time
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 import pyzed.sl as sl
@@ -33,11 +29,21 @@ class YoloDetectorZedNative(Node):
 
         init_params.depth_maximum_distance = 10.0
         init_params.camera_fps = 15
+        init_params.camera_resolution = sl.RESOLUTION.HD1080
+        self.output_path = "data/"
+        self.recordingParameters = sl.RecordingParameters()
+        self.recordingParameters.compression_mode = sl.SVO_COMPRESSION_MODE.H264
+        # Optional (ZED SDK >= 5.3): favor encoding speed over quality
+        self.recordingParameters.encoding_preset = sl.SVO_ENCODING_PRESET.DEFAULT
+        os.makedirs(self.output_path, exist_ok=True)
+        self.recordingParameters.video_filename = os.path.join(
+            self.output_path, time.strftime('run_%Y%m%d_%H%M%S.svo2'))
 
         err = self.zed.open(init_params)
         if err != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError(f'Camera Open Error: {err}')
-
+        res = self.zed.get_camera_information().camera_configuration.resolution
+        self.get_logger().info(f'{res.width}x{res.height}')
         # Positional tracking. It must be enabled BEFORE object detection.
         tracking_params = sl.PositionalTrackingParameters()
         tracking_params.enable_imu_fusion = True
@@ -47,90 +53,49 @@ class YoloDetectorZedNative(Node):
         err = self.zed.enable_positional_tracking(tracking_params)
         if err != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError(f'Positional Tracking Enable Error: {err}')
+        err = self.zed.enable_recording(self.recordingParameters)
+        if err != sl.ERROR_CODE.SUCCESS:
+            raise RuntimeError(f'Recording Enable Error: {err}')
         self.pose = sl.Pose()
         self.last_track_state = None
 
-        model_name = self.declare_parameter('model', 'krill_gate_v1.onnx').value
-        package_share = get_package_share_directory('wauv_perception')
-        onnx_path = os.path.join(package_share, 'models', model_name)
-        if not os.path.exists(onnx_path):
-            raise FileNotFoundError(f'ONNX file not found at: {onnx_path}')
+        # model_name = self.declare_parameter('model', 'krill_gate_v1.onnx').value
+        # package_share = get_package_share_directory('wauv_perception')
+        # onnx_path = os.path.join(package_share, 'models', model_name)
+        # if not os.path.exists(onnx_path):
+        #     raise FileNotFoundError(f'ONNX file not found at: {onnx_path}')
 
-        self.get_logger().info(f'Loading {onnx_path} into ZED TensorRT...')
-        obj_param = sl.ObjectDetectionParameters()
-        obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_YOLOLIKE_BOX_OBJECTS
-        obj_param.custom_onnx_file = onnx_path
-        obj_param.enable_tracking = False
-        obj_param.enable_segmentation = False
+        # self.get_logger().info(f'Loading {onnx_path} into ZED TensorRT...')
+        # obj_param = sl.ObjectDetectionParameters()
+        # obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_YOLOLIKE_BOX_OBJECTS
+        # obj_param.custom_onnx_file = onnx_path
+        # obj_param.enable_tracking = False
+        # obj_param.enable_segmentation = False
 
-        err = self.zed.enable_object_detection(obj_param)
-        if err != sl.ERROR_CODE.SUCCESS:
-            raise RuntimeError(f'Object Detection Enable Error: {err}')
-        self.get_logger().info('ZED YOLO TensorRT Engine Ready!')
+        # err = self.zed.enable_object_detection(obj_param)
+        # if err != sl.ERROR_CODE.SUCCESS:
+        #     raise RuntimeError(f'Object Detection Enable Error: {err}')
+        # self.get_logger().info('ZED YOLO TensorRT Engine Ready!')
 
         self.runtime_params = sl.RuntimeParameters()
         self.runtime_params.measure3D_reference_frame = sl.REFERENCE_FRAME.CAMERA
-        self.od_runtime_params = sl.CustomObjectDetectionRuntimeParameters()
-        self.od_runtime_params.object_detection_properties.detection_confidence_threshold = 30
+        # self.od_runtime_params = sl.CustomObjectDetectionRuntimeParameters()
+        # self.od_runtime_params.object_detection_properties.detection_confidence_threshold = 30
 
         self.image = sl.Mat()
-        self.depth = sl.Mat()  # NEW
-        self.objects = sl.Objects()
+        # self.depth = sl.Mat()  # NEW
+        # self.objects = sl.Objects()
 
         # NEW: streaming + recording toggles
         self.stream = self.declare_parameter('stream', True).value
-        self.record = self.declare_parameter('record', True).value
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        # NEW: recording (from record.py). One folder per run so runs never overwrite each other.
-        self.out_dir = os.path.join('data', time.strftime('%Y%m%d_%H%M%S'))
-        self.exr_queue = queue.Queue(maxsize=10)
-        self.mp4_queue = queue.Queue(maxsize=10)
-        self.stop_event = threading.Event()
-        self.workers = []
-        if self.record:
-            os.makedirs(self.out_dir, exist_ok=True)
-            self.workers = [
-                threading.Thread(target=self.exr_saving_worker, daemon=True),
-                threading.Thread(target=self.mp4_saving_worker, daemon=True),
-            ]
-            for t in self.workers:
-                t.start()
-            self.get_logger().info(f'Recording to {os.path.abspath(self.out_dir)}')
 
         self.gate_pub = self.create_publisher(Vector3, 'vision/gate_raw', 10)
         self.odom_pub = self.create_publisher(Odometry, '/mavros/odometry/out', 10)
 
         self.timer = self.create_timer(0.05, self.timer_callback)  # 20 Hz
 
-    # NEW: background writers (from record.py)
-    def exr_saving_worker(self):
-        idx = 0
-        while not self.stop_event.is_set() or not self.exr_queue.empty():
-            try:
-                rgbd = self.exr_queue.get(timeout=1)
-            except queue.Empty:
-                continue
-            cv2.imwrite(os.path.join(self.out_dir, f'rgbd_{idx:06d}.exr'), rgbd)
-            idx += 1
-            self.exr_queue.task_done()
-
-    def mp4_saving_worker(self):
-        writer = None
-        while not self.stop_event.is_set() or not self.mp4_queue.empty():
-            try:
-                frame = self.mp4_queue.get(timeout=1)
-            except queue.Empty:
-                continue
-            if writer is None:  # size from the actual frame, not hardcoded
-                h, w = frame.shape[:2]
-                writer = cv2.VideoWriter(
-                    os.path.join(self.out_dir, 'rgb_out.mp4'),
-                    cv2.VideoWriter_fourcc(*'mp4v'), 15.0, (w, h))
-            writer.write(frame)
-            self.mp4_queue.task_done()
-        if writer is not None:
-            writer.release()
 
     def publish_pose(self):
         state = self.zed.get_position(self.pose, sl.REFERENCE_FRAME.WORLD)
@@ -166,54 +131,43 @@ class YoloDetectorZedNative(Node):
 
         self.publish_pose()
 
-        status = self.zed.retrieve_custom_objects(self.objects, self.od_runtime_params)
+        # status = self.zed.retrieve_custom_objects(self.objects, self.od_runtime_params)
 
         self.zed.retrieve_image(self.image, sl.VIEW.LEFT, sl.MEM.CPU)
         frame = cv2.cvtColor(self.image.get_data(), cv2.COLOR_BGRA2BGR)
 
-        # NEW: record the clean frame + depth BEFORE boxes are drawn on it
-        if self.record:
-            self.zed.retrieve_measure(self.depth, sl.MEASURE.DEPTH)
-            if not self.mp4_queue.full():
-                self.mp4_queue.put(frame.copy())
-            if not self.exr_queue.full():
-                depth = self.depth.get_data()
-                if depth.ndim == 2:
-                    depth = depth[..., None]
-                self.exr_queue.put(np.dstack((frame, depth)))  # dstack makes a new array
+        # best = None
 
-        best = None
+        # if status == sl.ERROR_CODE.SUCCESS:
+        #     for obj in self.objects.object_list:
+        #         bbox_2d = obj.bounding_box_2d
+        #         x1, y1 = int(bbox_2d[0][0]), int(bbox_2d[0][1])
+        #         x2, y2 = int(bbox_2d[2][0]), int(bbox_2d[2][1])
 
-        if status == sl.ERROR_CODE.SUCCESS:
-            for obj in self.objects.object_list:
-                bbox_2d = obj.bounding_box_2d
-                x1, y1 = int(bbox_2d[0][0]), int(bbox_2d[0][1])
-                x2, y2 = int(bbox_2d[2][0]), int(bbox_2d[2][1])
+        #         pos = obj.position
+        #         x, y, z = float(pos[0]), float(pos[1]), float(pos[2])
 
-                pos = obj.position
-                x, y, z = float(pos[0]), float(pos[1]), float(pos[2])
+        #         class_id = obj.raw_label
+        #         score = obj.confidence
 
-                class_id = obj.raw_label
-                score = obj.confidence
+        #         if not np.isfinite(x) or x <= 0.0:
+        #             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), thickness=2)
+        #             continue
 
-                if not np.isfinite(x) or x <= 0.0:
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), thickness=2)
-                    continue
+        #         if best is None or score > best[0]:
+        #             best = (score, x, y, z)
 
-                if best is None or score > best[0]:
-                    best = (score, x, y, z)
+        #         self.get_logger().info(f'{class_id} {score:.2f}: x={x:.2f} y={y:.2f} z={z:.2f}')
+        #         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), thickness=2)
+        #         cv2.putText(
+        #             frame, f'{x:.2f} {y:.2f} {z:.2f}m', (x1, max(24, y1 - 8)),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA
+        #         )
 
-                self.get_logger().info(f'{class_id} {score:.2f}: x={x:.2f} y={y:.2f} z={z:.2f}')
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), thickness=2)
-                cv2.putText(
-                    frame, f'{x:.2f} {y:.2f} {z:.2f}m', (x1, max(24, y1 - 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA
-                )
-
-        if best is not None:
-            msg = Vector3()
-            _, msg.x, msg.y, msg.z = best
-            self.gate_pub.publish(msg)
+        # if best is not None:
+        #     msg = Vector3()
+        #     _, msg.x, msg.y, msg.z = best
+        #     self.gate_pub.publish(msg)
 
         # CHANGED: re-enabled; streams the annotated frame
         if self.stream:
@@ -237,6 +191,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        yolo_detector.zed.disable_recording()
+        yolo_detector.stop_event.set()  
         # NEW: flush remaining frames to disk
         yolo_detector.stop_event.set()
         for t in yolo_detector.workers:
