@@ -34,7 +34,6 @@ class YoloDetectorZedNative(Node):
         self.recordingParameters = sl.RecordingParameters()
         self.recordingParameters.compression_mode = sl.SVO_COMPRESSION_MODE.H264
         # Optional (ZED SDK >= 5.3): favor encoding speed over quality
-        self.recordingParameters.encoding_preset = sl.SVO_ENCODING_PRESET.DEFAULT
         os.makedirs(self.output_path, exist_ok=True)
         self.recordingParameters.video_filename = os.path.join(
             self.output_path, time.strftime('run_%Y%m%d_%H%M%S.svo2'))
